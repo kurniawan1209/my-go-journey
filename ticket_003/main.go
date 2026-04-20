@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 )
 
 type Order struct {
@@ -18,7 +19,20 @@ type OrderResponse struct {
 	Order   *Order `json:"order,omitempty"`
 }
 
-var orderDB = make(map[string]Order)
+type OrderDB struct {
+	mu     sync.Mutex
+	orders map[string]Order
+}
+
+func (db *OrderDB) Set(id string, order Order) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.orders[id] = order
+}
+
+var globalOrderDB = &OrderDB{
+	orders: make(map[string]Order),
+}
 
 func handleOrder(w http.ResponseWriter, r *http.Request) {
 
@@ -43,12 +57,14 @@ func handleOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	globalOrderDB.Set(body.ID, body)
+
 	response := OrderResponse{
 		Status:  "success",
 		Message: "Order received",
 		Order:   &body,
 	}
-	w.Header().Set("Content-Type", "application//json")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(&response)
 
